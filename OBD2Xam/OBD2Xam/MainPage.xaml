@@ -5,10 +5,9 @@
              x:Class="OBD2Xam.MainPage">
 
     <StackLayout>
-        <!-- Place new controls here -->
-        <Label Text="Welcome to Xamarin.Forms!" 
-           HorizontalOptions="Center"
-           VerticalOptions="CenterAndExpand" />
+        <Label VerticalOptions="Start">Available Bluetooth Devices:</Label>
+        <ListView x:Name="deviceList"  BackgroundColor="LightYellow" SelectionMode="Single"></ListView>
+        <Button x:Name="startButton" Clicked="StartButton_Clicked" Text="Connect" />
     </StackLayout>
 
 </ContentPage>

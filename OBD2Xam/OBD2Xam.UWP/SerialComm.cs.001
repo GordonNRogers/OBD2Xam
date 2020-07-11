@@ -1,0 +1,258 @@
+﻿using OBD2Xam.UWP;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using Windows.Devices.Enumeration;
+using Windows.Devices.SerialCommunication;
+using Windows.Security.Cryptography;
+using Windows.Storage.Streams;
+using System.IO.Ports;
+
+
+[assembly: Xamarin.Forms.Dependency(typeof(SerialComm))]
+
+namespace OBD2Xam.UWP
+{
+    class SerialComm : ISerialComm
+    {
+        //protected static BAUD_RATE baudRate = BAUD_RATE.BR_9600;
+        protected string comPort = "";
+        //protected SerialPort sp;
+        protected SerialDevice sd = null;
+        private bool isOpen = false;
+        protected SerialPort sp;
+
+        public event SerialDefs.ConnectionEventType OnConnect = new SerialDefs.ConnectionEventType(defaultConnectionEventHandler);
+        public event SerialDefs.ConnectionEventType OnTimeout = new SerialDefs.ConnectionEventType(defaultConnectionEventHandler);
+
+        protected SerialDevice serialDevice = null;
+
+        public void Close()
+        {
+            try
+            {
+                serialDevice.Dispose();
+                serialDevice = null;
+                //sp.Close();
+            }
+            catch (Exception exc)
+            {
+                System.Diagnostics.Debug.WriteLine(exc.ToString());
+                System.Diagnostics.Debugger.Break();
+            }
+        }
+
+        // https://docs.microsoft.com/en-us/windows/uwp/packaging/app-capability-declarations
+        // https://docs.microsoft.com/en-us/uwp/api/windows.devices.serialcommunication
+        // https://docs.microsoft.com/en-us/uwp/api/windows.devices.serialcommunication.serialdevice
+
+        private static void defaultConnectionEventHandler()
+        {
+            // do nothing, just something to call
+        }
+
+        public async void Open()
+        {
+            try
+            {
+
+                string selector = SerialDevice.GetDeviceSelector(comPort);
+                //DeviceInformationCollection devices = await DeviceInformation.FindAllAsync(selector);
+
+                // https://www.c-sharpcorner.com/article/async-and-await-in-c-sharp/
+                // https://docs.microsoft.com/en-us/dotnet/csharp/programming-guide/concepts/async/
+                //Task<DeviceInformationCollection> devicesTask = DeviceInformation.FindAllAsync(selector).AsTask();
+                //DeviceInformationCollection devices = await devicesTask;
+                //System.Threading.Thread.Yield();
+
+
+                // The first call to DeviceInformation.FindAllAsync function must be made in UI thread...
+
+                // This section works.
+                // it worked with just a plain devices = await DeviceInformation.FindAllAsync(selector);,
+                // so I I'm not sure runAsync() is really needed.
+                DeviceInformationCollection devices = null;
+                TaskCompletionSource<bool> l_tcsResult = new TaskCompletionSource<bool>();
+                await Windows.ApplicationModel.Core.CoreApplication.MainView.CoreWindow.Dispatcher.RunAsync(
+                    Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
+                    {
+                        try
+                        {
+                            devices = await DeviceInformation.FindAllAsync(selector);
+                            l_tcsResult.SetResult(true);
+                        }
+                        catch (Exception exc)
+                        {
+                            l_tcsResult.SetException(exc);
+                            System.Diagnostics.Debug.WriteLine(exc.ToString());
+                            System.Diagnostics.Debugger.Break();
+                        }
+                    }
+                );
+                await l_tcsResult.Task;
+
+
+                // https://stackoverflow.com/questions/41319056/uwp-serialdevice-fromidasync-return-null
+                //System -internal or on-chassis serial ports may be enumerated by DeviceInformation.FindAllAsync(), but cannot be opened by SerialDevice.FromIdAsync() 
+                //because they currently are not supported.However, serial ports connected over USB, such as on USB-to-Serial cables are supported.
+                // https://docs.microsoft.com/en-us/uwp/api/Windows.Devices.SerialCommunication
+
+                if (devices.Any())
+                {
+                    //DateTime dtTimeout = DateTime.Now.AddSeconds(30);
+                    DeviceInformation deviceInfo = devices.First<DeviceInformation>();
+
+
+                    // https://social.msdn.microsoft.com/Forums/windowsapps/en-US/492640a1-43e1-4e5d-b898-7cfd601e33c3/addon-quotelement-not-found-exception-from-hresult-0x80070490quot?forum=wpsubmit
+                    // https://stackoverflow.com/questions/34791542/uwp-bluetoothledevice-element-not-found-exception-from-hresult-0x80070490
+                    //TaskCompletionSource<bool> l_tcsResult = new TaskCompletionSource<bool>();
+                    //System.Threading.Thread.Yield();
+                    TaskCompletionSource<bool> l_tcsResult2 = new TaskCompletionSource<bool>();
+                    await Windows.ApplicationModel.Core.CoreApplication.MainView.CoreWindow.Dispatcher.RunAsync(
+                        Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
+                        {
+                            try
+                            {
+                                // await may be returning too early...
+                                // https://stackoverflow.com/questions/42793572/serialdevice-fromidasync-returns-null
+                                // You are using IBackgroundTask incorrectly, you must register your deferal and notifiy 
+                                // when it is complete. This is done by changing your async void functions to async task and making Run a async void
+
+                                var task = SerialDevice.FromIdAsync(deviceInfo.Id).AsTask();
+                                var aw = task.GetAwaiter();
+                                while (!aw.IsCompleted)
+                                {
+                                    System.Threading.Thread.Sleep(100);
+                                }
+                                sd = task.Result;
+
+
+
+                                //System.Threading.Thread.Yield();
+                                //sd = await SerialDevice.FromIdAsync(deviceInfo.Id);
+                                //System.Threading.Thread.Yield();
+                                l_tcsResult2.SetResult(true);
+                            }
+                            catch (Exception exc)
+                            {
+                                l_tcsResult2.SetException(exc);
+                                System.Diagnostics.Debug.WriteLine(exc.ToString());
+                                System.Diagnostics.Debugger.Break();
+                            }
+                        }
+                    );
+                    //System.Threading.Thread.Sleep(1500);
+                    //System.Threading.Thread.Yield();
+                    await l_tcsResult2.Task;
+                    //System.Threading.Thread.Yield();
+
+
+                    //System.Threading.Thread.Yield();
+                    //System.Threading.Thread.Sleep(15000);
+                    isOpen = (sd != null);
+                    if (isOpen)
+                    {
+                        // fire a connected event and return
+                        OnConnect();
+                        return;
+                    }
+                    else
+                    {
+                        // fire a timeout event and return
+                        OnTimeout();
+                        return;
+                    }
+                }
+            }
+            catch (System.IO.IOException ioe)
+            {
+                string msg = ioe.Message.Trim();
+                if (msg.Contains("not found"))
+                {
+                    // COM port or device not available
+                    // TODO:  get an error message to the main window on the UI thread so MainPage can show it somewhere...
+                    System.Diagnostics.Debugger.Break();
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine(ioe.ToString());
+                    //System.Diagnostics.Debugger.Break();
+                }
+            }
+            catch (Exception exc)
+            {
+                System.Diagnostics.Debug.WriteLine(exc.ToString());
+                System.Diagnostics.Debugger.Break();
+            }
+
+        }
+
+        public bool InitializeSerialPort(string port, int baud)
+        {
+            bool initialized = false;
+            try
+            {
+                comPort = port;
+                //sp = new SerialPort(comPort, baud);
+                //sp.ReadBufferSize = Constants.BUFFER_SIZE;
+                initialized = true;
+            }
+            catch(Exception exc)
+            {
+                System.Diagnostics.Debug.WriteLine(exc.ToString());
+                System.Diagnostics.Debugger.Break();
+            }
+
+            return initialized;
+        }
+
+        private async Task<string> aRead()
+        {
+            byte[] buffArray = new byte[1024];
+            IBuffer buffer = CryptographicBuffer.CreateFromByteArray(buffArray);
+            await serialDevice.InputStream.ReadAsync(buffer, (uint)buffArray.Length, InputStreamOptions.Partial);
+            return CryptographicBuffer.ConvertBinaryToString( BinaryStringEncoding.Utf8, buffer);
+        }
+
+        public string ReadAvailableData()
+        {
+            string result = "";
+            try
+            {
+                result = aRead().Result;
+                //result = sp.ReadExisting();
+            }
+            catch (Exception exc)
+            {
+                System.Diagnostics.Debug.WriteLine(exc.ToString());
+                System.Diagnostics.Debugger.Break();
+            }
+            return result;
+        }
+
+        private async void aWrite(string text)
+        {
+            IBuffer buffer = CryptographicBuffer.ConvertStringToBinary( text, BinaryStringEncoding.Utf8 );
+            await serialDevice.OutputStream.WriteAsync(buffer);
+        }
+
+        public void WriteLine(string text)
+        {
+            try
+            {
+                aWrite(text);
+                //sp.WriteLine(text);
+            }
+            catch (Exception exc)
+            {
+                System.Diagnostics.Debug.WriteLine(exc.ToString());
+                System.Diagnostics.Debugger.Break();
+            }
+        }
+
+        public bool IsOpen()
+        {
+            return isOpen;
+        }
+    }
+}
