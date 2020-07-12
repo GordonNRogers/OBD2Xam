@@ -29,8 +29,6 @@ namespace OBD2Xam.UWP
 {
     class SerialComm : ISerialComm
     {
-        private bool isOpen = false;
-
         // per https://www.bluetooth.com/specifications/assigned-numbers/service-discovery/,
         // the service type 1101 is the serial port
         private const string SERIAL_PORT_INTERFACE = @"{00001101-0000-1000-8000-00805F9B34FB}";
@@ -39,22 +37,32 @@ namespace OBD2Xam.UWP
         DataWriter dw = null;
         StreamReader sr = null;
 
+        public SerialComm()
+        {
+            BtDeviceEnumerationStarted += SerialComm_BtDeviceEnumerationStarted;
+            BtDeviceEnumerationComplete += SerialComm_BtDeviceEnumerationComplete;
+        }
+
+        private void SerialComm_BtDeviceEnumerationStarted(object sender, EventArgs e)
+        {
+        }
+
+        private void SerialComm_BtDeviceEnumerationComplete(object sender, EventArgs e)
+        {
+        }
+
         public void Close()
         {
             try
             {
-                sr.Dispose();
-                dw.Dispose();
-                streamSocket.Dispose();
+                sr?.Dispose();
+                dw?.Dispose();
+                streamSocket?.Dispose();
             }
             catch (Exception exc)
             {
                 System.Diagnostics.Debug.WriteLine(exc.ToString());
                 System.Diagnostics.Debugger.Break();
-            }
-            finally
-            {
-                isOpen = false;
             }
         }
 
@@ -72,6 +80,12 @@ namespace OBD2Xam.UWP
             string result = "";
             try
             {
+                if (sr == null)
+                {
+                    System.Diagnostics.Debugger.Break();
+                    return result;
+                }
+
                 lock (sr)
                 {
                     // the stream only supports blocking reads, so the thread will be blocked while trying to read
@@ -123,7 +137,12 @@ namespace OBD2Xam.UWP
 
         public bool IsOpen()
         {
-            return isOpen;
+            bool open = false;
+
+            if (streamSocket != null && dw != null && sr != null)
+                open = true;
+
+            return open;
         }
 
         // https://docs.microsoft.com/en-us/uwp/api/windows.devices.enumeration.devicewatcher?f1url=https%3A%2F%2Fmsdn.microsoft.com%2Fquery%2Fdev15.query%3FappId%3DDev15IDEF1%26l%3DEN-US%26k%3Dk(Windows.Devices.Enumeration.DeviceWatcher)%3Bk(TargetFrameworkMoniker-.NETCore%2CVersion%3Dv5.0)%3Bk(DevLang-csharp)%26rd%3Dtrue
@@ -133,20 +152,15 @@ namespace OBD2Xam.UWP
         public event EventHandler<BtDeviceRemovedParams> BtDeviceRemoved;
         public event EventHandler<BtDeviceUpdatedParams> BtDeviceUpdated;
         public event EventHandler BtDeviceEnumerationComplete;
-        public event EventHandler BtDeviceEnumerationStarted;
+        public event EventHandler BtDeviceEnumerationStarted ;
 
         private void onBtDeviceAdded (DeviceWatcher dw, DeviceInformation di)
         {
-            //if (!btDevices.ContainsKey(di.Id))
-            //    btDevices.Add(di.Id, di);
             BtDeviceAdded(this, new BtDeviceAddedParams { name = di.Name, id = di.Id });
         }
 
         private void onBtDeviceRemoved(DeviceWatcher dw, DeviceInformationUpdate diu)
         {
-            //if (!btDevices.ContainsKey(diu.Id))
-            //    btDevices.Remove(diu.Id);
-
             BtDeviceRemoved(this, new BtDeviceRemovedParams { id = diu.Id });
         }
 
@@ -157,7 +171,6 @@ namespace OBD2Xam.UWP
 
         private void OnBtEnumerationComplete(DeviceWatcher dw, object obj)
         {
-            //btEnumerationFinished = true;
             BtDeviceEnumerationComplete(this, new EventArgs());
         }
 
@@ -182,68 +195,6 @@ namespace OBD2Xam.UWP
             deviceWatcher.Start();
         }
 
-
-#if UNUSED
-        // TODO:  this needs to be exposed as a bindable property so it can be bound to a control
-        private Dictionary<string, DeviceInformation> btDevices = new Dictionary<string, DeviceInformation>();
-        private bool btEnumerationFinished = false;
-
-        public async Task<List<BtDeviceNameID>> GetBTDevices()
-        {
-            string[] requestedProperties = new string[] { 
-                "System.Devices.Aep.DeviceAddress", 
-                "System.Devices.Aep.IsConnected" 
-            };
-
-            btEnumerationFinished = false;
-            btDevices.Clear();
-            deviceWatcher?.Stop();  // if deviceWatcher already exists, stop it
-            deviceWatcher = DeviceInformation.CreateWatcher("(System.Devices.Aep.ProtocolId:=\"{e0cbf06c-cd8b-4647-bb8a-263b43f0f974}\")",
-                                                            requestedProperties,
-                                                            DeviceInformationKind.AssociationEndpoint);
-
-            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            // TODO:  start the enumeration, but run it in background, let the events manage the list
-            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            deviceWatcher.Added += new Windows.Foundation.TypedEventHandler<DeviceWatcher, DeviceInformation>(onBtDeviceAdded);
-            deviceWatcher.Removed += new TypedEventHandler<DeviceWatcher, DeviceInformationUpdate>(onBtDeviceRemoved);
-            deviceWatcher.Updated += new TypedEventHandler<DeviceWatcher, DeviceInformationUpdate>(onBtDeviceUpdated);
-            deviceWatcher.EnumerationCompleted += new TypedEventHandler<DeviceWatcher, object>(OnBtEnumerationComplete);
-            deviceWatcher.Stopped += new TypedEventHandler<DeviceWatcher, object>(OnBtEnumerationComplete);
-            deviceWatcher.Start();
-
-            // wait for the enumeration to finish
-            string lastStatus = "";
-            string newStatus = "";
-            while (!btEnumerationFinished)
-            {
-                System.Threading.Thread.Sleep(100);
-                newStatus = deviceWatcher.Status.ToString();
-                if (newStatus != lastStatus)
-                {
-                    System.Diagnostics.Debug.WriteLine("BT Enumeration: " + newStatus);
-                    lastStatus = newStatus;
-                }
-            }
-
-
-            // return a list of atrings to display...needs to contain the device id
-            //System.Diagnostics.Debugger.Break();
-            List<BtDeviceNameID> devices = new List<BtDeviceNameID>();
-            foreach(string key in btDevices.Keys)
-            {
-                //devices.Add(key + "::" + btDevices[key].Name);
-                devices.Add(new BtDeviceNameID() {
-                    Name = btDevices[key].Name,
-                    ID =key
-                });
-            }
-            return devices;  // TODO: do away with this and let OnDeviceAdded/OnDeviceRemoved handlers update the list
-        }
-#endif
-
         public async Task<bool> BtConnect(string deviceID)
         {
 
@@ -254,9 +205,14 @@ namespace OBD2Xam.UWP
                 DeviceAccessStatus accessStatus = DeviceAccessInformation.CreateFromId(deviceID).CurrentStatus;
                 if (accessStatus == DeviceAccessStatus.DeniedByUser)
                 {
-                    await OBD2Xam.MainPage.Instance.DisplayAlert("BT Error",
-                        "This app does not have access to connect to the remote device.  Please grant access in Settings > Privacy > Other Devices.",
-                        "");
+                    //await OBD2Xam.MainPage.Instance.DisplayAlert("Error",
+                    //    "This app does not have access to connect to the remote device.  Please grant access in Settings > Privacy > Other Devices.",
+                    //    "Cancel");
+                    await Xamarin.Forms.Device.InvokeOnMainThreadAsync(
+                        () => { OBD2Xam.MainPage.Instance.DisplayAlert("Error",
+                            "This app does not have access to connect to the remote device.  Please grant access in Settings > Privacy > Other Devices.", 
+                            "Cancel"); }
+                        );
                     return false;
                 }
 
@@ -309,11 +265,10 @@ namespace OBD2Xam.UWP
                                 await streamSocket.ConnectAsync(service.ConnectionHostName, service.ConnectionServiceName);
                                 dw = new DataWriter(streamSocket.OutputStream);
                                 sr = new StreamReader(streamSocket.InputStream.AsStreamForRead(256));
-                                isOpen = true;
                                 break;
                             }
                         }
-                        if(!isOpen)
+                        if(!IsOpen())
                         {
                             throw new Exception("Service not found)");
                         }
@@ -329,6 +284,7 @@ namespace OBD2Xam.UWP
                     await Xamarin.Forms.Device.InvokeOnMainThreadAsync(
                         () => { OBD2Xam.MainPage.Instance.DisplayAlert("Error", "Device not listening.", "Cancel"); } 
                         );
+                    this.Close();
                 }
                 else
                 {
@@ -338,7 +294,7 @@ namespace OBD2Xam.UWP
             }
 
 
-            return isOpen;
+            return IsOpen();
         }
 
         private async void logRfTypes(RfcommDeviceServicesResult rfResultList)
