@@ -24,8 +24,15 @@ namespace OBD2Xam.Droid
 
         private Android.Bluetooth.BluetoothAdapter adapter=null;
         private BluetoothSocket _socket = null;
-        public event SerialDefs.ConnectionEventType OnConnect = new SerialDefs.ConnectionEventType(defaultConnectionEventHandler);
-        public event SerialDefs.ConnectionEventType OnTimeout = new SerialDefs.ConnectionEventType(defaultConnectionEventHandler);
+
+        public event EventHandler<BtDeviceAddedParams> BtDeviceAdded;
+        public event EventHandler<BtDeviceRemovedParams> BtDeviceRemoved;
+        public event EventHandler<BtDeviceUpdatedParams> BtDeviceUpdated;
+        public event EventHandler BtDeviceEnumerationComplete;
+        public event EventHandler BtDeviceEnumerationStarted;
+
+        //public event SerialDefs.ConnectionEventType OnConnect = new SerialDefs.ConnectionEventType(defaultConnectionEventHandler);
+        //public event SerialDefs.ConnectionEventType OnTimeout = new SerialDefs.ConnectionEventType(defaultConnectionEventHandler);
 
 
         private static void defaultConnectionEventHandler()
@@ -131,6 +138,7 @@ namespace OBD2Xam.Droid
             }
         }
 
+        /*
         public async Task<List<BtDeviceNameID>> GetBTDevices()
         {
             List<BtDeviceNameID> devices = new List<BtDeviceNameID>();
@@ -150,14 +158,20 @@ namespace OBD2Xam.Droid
 
             return devices;
         }
+        */
+
 
         public async Task<bool> BtConnect(string deviceID)
         {
-
             throw new NotImplementedException();
         }
 
         public bool IsOpen()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void StartBtDeviceEnumeration()
         {
             throw new NotImplementedException();
         }

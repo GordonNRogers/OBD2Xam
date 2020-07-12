@@ -20,6 +20,7 @@ using System.Threading;
 using System.IO;
 using Windows.Storage;
 using System.Text;
+using System.Runtime.CompilerServices;
 
 [assembly: Xamarin.Forms.Dependency(typeof(SerialComm))]
 #pragma warning disable 1998  // disable 'no await' warnings
@@ -125,46 +126,64 @@ namespace OBD2Xam.UWP
             return isOpen;
         }
 
+        // https://docs.microsoft.com/en-us/uwp/api/windows.devices.enumeration.devicewatcher?f1url=https%3A%2F%2Fmsdn.microsoft.com%2Fquery%2Fdev15.query%3FappId%3DDev15IDEF1%26l%3DEN-US%26k%3Dk(Windows.Devices.Enumeration.DeviceWatcher)%3Bk(TargetFrameworkMoniker-.NETCore%2CVersion%3Dv5.0)%3Bk(DevLang-csharp)%26rd%3Dtrue
+        private DeviceWatcher deviceWatcher = null;
 
-        private void OnBtDeviceAdded (DeviceWatcher dw, DeviceInformation di)
+        public event EventHandler<BtDeviceAddedParams> BtDeviceAdded;
+        public event EventHandler<BtDeviceRemovedParams> BtDeviceRemoved;
+        public event EventHandler<BtDeviceUpdatedParams> BtDeviceUpdated;
+        public event EventHandler BtDeviceEnumerationComplete;
+        public event EventHandler BtDeviceEnumerationStarted;
+
+        private void onBtDeviceAdded (DeviceWatcher dw, DeviceInformation di)
         {
-            if (!btDevices.ContainsKey(di.Id))
-                btDevices.Add(di.Id, di);
+            //if (!btDevices.ContainsKey(di.Id))
+            //    btDevices.Add(di.Id, di);
+            BtDeviceAdded(this, new BtDeviceAddedParams { name = di.Name, id = di.Id });
         }
 
-        private void OnBtDeviceRemoved(DeviceWatcher dw, DeviceInformationUpdate diu)
+        private void onBtDeviceRemoved(DeviceWatcher dw, DeviceInformationUpdate diu)
         {
-            if (!btDevices.ContainsKey(diu.Id))
-                btDevices.Remove(diu.Id);
+            //if (!btDevices.ContainsKey(diu.Id))
+            //    btDevices.Remove(diu.Id);
+
+            BtDeviceRemoved(this, new BtDeviceRemovedParams { id = diu.Id });
         }
 
-        private void OnBtDeviceUpdated(DeviceWatcher dw, DeviceInformationUpdate diu)
+        private void onBtDeviceUpdated(DeviceWatcher dw, DeviceInformationUpdate diu)
         {
-            return;
-
-            //System.Diagnostics.Debugger.Break();
-
-            // TODO: update each property listed in diu.Properties
-            if (btDevices.ContainsKey(diu.Id))
-            {
-                //btDevices[diu.Id] = diu.Properties
-                foreach(string skey in diu.Properties.Keys)
-                {
-                    System.Diagnostics.Debug.WriteLine(skey);
-                    System.Diagnostics.Debugger.Break();
-                    // System.Devices.Aep.IsPaired
-                    //btDevices[diu.Id].
-                }
-            }
+            BtDeviceUpdated(this, new BtDeviceUpdatedParams { id = diu.Id });
         }
 
         private void OnBtEnumerationComplete(DeviceWatcher dw, object obj)
         {
-            btEnumerationFinished = true;
+            //btEnumerationFinished = true;
+            BtDeviceEnumerationComplete(this, new EventArgs());
         }
 
-        // https://docs.microsoft.com/en-us/uwp/api/windows.devices.enumeration.devicewatcher?f1url=https%3A%2F%2Fmsdn.microsoft.com%2Fquery%2Fdev15.query%3FappId%3DDev15IDEF1%26l%3DEN-US%26k%3Dk(Windows.Devices.Enumeration.DeviceWatcher)%3Bk(TargetFrameworkMoniker-.NETCore%2CVersion%3Dv5.0)%3Bk(DevLang-csharp)%26rd%3Dtrue
-        private DeviceWatcher deviceWatcher = null;
+        public void StartBtDeviceEnumeration()
+        {
+            string[] requestedProperties = new string[] {
+                "System.Devices.Aep.DeviceAddress",
+                "System.Devices.Aep.IsConnected"
+            };
+
+            deviceWatcher?.Stop();  // if deviceWatcher already exists, stop it
+            deviceWatcher = DeviceInformation.CreateWatcher("(System.Devices.Aep.ProtocolId:=\"{e0cbf06c-cd8b-4647-bb8a-263b43f0f974}\")",
+                                                            requestedProperties,
+                                                            DeviceInformationKind.AssociationEndpoint);
+
+            // start the enumeration, but run it in background, let the events manage the list
+            deviceWatcher.Added += new Windows.Foundation.TypedEventHandler<DeviceWatcher, DeviceInformation>(onBtDeviceAdded);
+            deviceWatcher.Removed += new TypedEventHandler<DeviceWatcher, DeviceInformationUpdate>(onBtDeviceRemoved);
+            deviceWatcher.Updated += new TypedEventHandler<DeviceWatcher, DeviceInformationUpdate>(onBtDeviceUpdated);
+            deviceWatcher.EnumerationCompleted += new TypedEventHandler<DeviceWatcher, object>(OnBtEnumerationComplete);
+            deviceWatcher.Stopped += new TypedEventHandler<DeviceWatcher, object>(OnBtEnumerationComplete);
+            deviceWatcher.Start();
+        }
+
+
+#if UNUSED
         // TODO:  this needs to be exposed as a bindable property so it can be bound to a control
         private Dictionary<string, DeviceInformation> btDevices = new Dictionary<string, DeviceInformation>();
         private bool btEnumerationFinished = false;
@@ -176,8 +195,8 @@ namespace OBD2Xam.UWP
                 "System.Devices.Aep.IsConnected" 
             };
 
-            btDevices.Clear();
             btEnumerationFinished = false;
+            btDevices.Clear();
             deviceWatcher?.Stop();  // if deviceWatcher already exists, stop it
             deviceWatcher = DeviceInformation.CreateWatcher("(System.Devices.Aep.ProtocolId:=\"{e0cbf06c-cd8b-4647-bb8a-263b43f0f974}\")",
                                                             requestedProperties,
@@ -188,9 +207,9 @@ namespace OBD2Xam.UWP
             // TODO:  start the enumeration, but run it in background, let the events manage the list
             ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            deviceWatcher.Added += new Windows.Foundation.TypedEventHandler<DeviceWatcher, DeviceInformation>(OnBtDeviceAdded);
-            deviceWatcher.Removed += new TypedEventHandler<DeviceWatcher, DeviceInformationUpdate>(OnBtDeviceRemoved);
-            deviceWatcher.Updated += new TypedEventHandler<DeviceWatcher, DeviceInformationUpdate>(OnBtDeviceUpdated);
+            deviceWatcher.Added += new Windows.Foundation.TypedEventHandler<DeviceWatcher, DeviceInformation>(onBtDeviceAdded);
+            deviceWatcher.Removed += new TypedEventHandler<DeviceWatcher, DeviceInformationUpdate>(onBtDeviceRemoved);
+            deviceWatcher.Updated += new TypedEventHandler<DeviceWatcher, DeviceInformationUpdate>(onBtDeviceUpdated);
             deviceWatcher.EnumerationCompleted += new TypedEventHandler<DeviceWatcher, object>(OnBtEnumerationComplete);
             deviceWatcher.Stopped += new TypedEventHandler<DeviceWatcher, object>(OnBtEnumerationComplete);
             deviceWatcher.Start();
@@ -223,6 +242,7 @@ namespace OBD2Xam.UWP
             }
             return devices;  // TODO: do away with this and let OnDeviceAdded/OnDeviceRemoved handlers update the list
         }
+#endif
 
         public async Task<bool> BtConnect(string deviceID)
         {
@@ -303,8 +323,18 @@ namespace OBD2Xam.UWP
             }
             catch (Exception exc)
             {
-                System.Diagnostics.Debug.WriteLine(exc.Message);
-                System.Diagnostics.Debugger.Break();
+                if (exc.Message == "Element not found. (Exception from HRESULT: 0x80070490)")
+                {
+                    //System.Diagnostics.Debug.WriteLine("Device not listening.");
+                    await Xamarin.Forms.Device.InvokeOnMainThreadAsync(
+                        () => { OBD2Xam.MainPage.Instance.DisplayAlert("Error", "Device not listening.", "Cancel"); } 
+                        );
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine(exc.Message);
+                    System.Diagnostics.Debugger.Break();
+                }
             }
 
 

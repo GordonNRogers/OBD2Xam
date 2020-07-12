@@ -9,7 +9,7 @@ using Xamarin.Forms;
 
 namespace OBD2Xam
 {
-    class BtSerialCommMgr
+    class BtSerialCommMgr: IBtEnum
     {
         private Thread commThread;
         private static bool shutdownRequested = false;
@@ -20,6 +20,11 @@ namespace OBD2Xam
         private string deviceId = "";
         public delegate void ConnectdHandler(BtSerialCommMgr drv);
         public event ConnectdHandler OnConnect = DefautConnectedHandler;
+        public event EventHandler<BtDeviceAddedParams> BtDeviceAdded;
+        public event EventHandler<BtDeviceRemovedParams> BtDeviceRemoved;
+        public event EventHandler<BtDeviceUpdatedParams> BtDeviceUpdated;
+        public event EventHandler BtDeviceEnumerationComplete;
+        public event EventHandler BtDeviceEnumerationStarted;
 
         private const int retrySeconds = 60;
 
@@ -29,18 +34,50 @@ namespace OBD2Xam
         private const string lineSeperator = "\r";
 
         private AutoResetEvent areLineRecieved = new AutoResetEvent(false);
+        private string lastResponseRecieved = "";
 
 
 
         public BtSerialCommMgr()
         {
             deviceCommDriver = DependencyService.Get<ISerialComm>();
+            deviceCommDriver.BtDeviceAdded += DeviceCommDriver_BtDeviceAdded;
+            deviceCommDriver.BtDeviceRemoved += DeviceCommDriver_BtDeviceRemoved;
+            deviceCommDriver.BtDeviceUpdated += DeviceCommDriver_BtDeviceUpdated;
+            deviceCommDriver.BtDeviceEnumerationComplete += DeviceCommDriver_BtDeviceEnumerationComplete;
         }
+        /*
 
         public async Task<List<BtDeviceNameID>> EnumerateDevices()
         {
            List<BtDeviceNameID> devices =  await deviceCommDriver.GetBTDevices();
            return devices;
+        }
+        */
+
+        public void StartBtDeviceEnumeration()
+        {
+            deviceCommDriver.StartBtDeviceEnumeration();
+        }
+
+        public void DeviceCommDriver_BtDeviceEnumerationComplete(object sender, EventArgs e)
+        {
+            BtDeviceEnumerationComplete(this, e);
+        }
+
+        public void DeviceCommDriver_BtDeviceUpdated(object sender, BtDeviceUpdatedParams e)
+        {
+            BtDeviceUpdated(this, e);
+        }
+
+        public void DeviceCommDriver_BtDeviceRemoved(object sender, BtDeviceRemovedParams e)
+        {
+            BtDeviceRemoved(this, e);
+        }
+
+        public void DeviceCommDriver_BtDeviceAdded(object sender, BtDeviceAddedParams e)
+        {
+            BtDeviceAdded(this, e);
         }
 
         public async Task<bool> BtConnect(string deviceId)
@@ -56,11 +93,10 @@ namespace OBD2Xam
 
         private void timeoutHandler()
         {
-            MainPage.ShowText("Connection timeout.");
-
-
+            // TODO:  differentiate between a loss of connection and commands that just aren't responded too
             System.Diagnostics.Debugger.Break();
-            bool connected = false;
+
+            bool connected = deviceCommDriver.IsOpen();
             // if the connection fails, log a message to the console and keep retrying for 1 minute
             if (!connected)
             {
@@ -122,12 +158,13 @@ namespace OBD2Xam
             }
         }
 
-        public void SendLine(string text)
+        public string SendLine(string text)
         {
+            string result = "";
             try
             {
                 deviceCommDriver.WriteLine(text + lineSeperator);
-                System.Diagnostics.Debug.WriteLine("Line sent: " + text);
+                System.Diagnostics.Debug.WriteLine("Command: " + text);
 
                 // wait for a response
                 if(!areLineRecieved.WaitOne(1000 * 30))
@@ -135,19 +172,26 @@ namespace OBD2Xam
                     System.Diagnostics.Debugger.Break();
                     timeoutHandler();
                 }
+                else
+                {
+                    result = lastResponseRecieved;
+                    System.Diagnostics.Debug.WriteLine("Response: " + result);
+                }
             }
             catch (Exception exc)
             {
                 System.Diagnostics.Debug.WriteLine(exc.ToString());
                 System.Diagnostics.Debugger.Break();
             }
+            return result;
         }
 
         protected static void DefautLineRecievedHandler(BtSerialCommMgr mgr, string line)
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine("Line Recieved: " + line);
+                //System.Diagnostics.Debug.WriteLine("Line Recieved: " + line);
+                mgr.lastResponseRecieved = line;
                 // signal that we recieved a response and it's ok to move on to the next command
                 mgr.areLineRecieved.Set();
             }

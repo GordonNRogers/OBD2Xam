@@ -11,7 +11,7 @@ namespace OBD2Xam
     public partial class MainPage : ContentPage
     {
         private BtSerialCommMgr driver = new BtSerialCommMgr();
-        private static MainPage instance = null;
+        public static MainPage instance = null;
         private bool started = false;
         private Dictionary<string, BtDeviceNameID> deviceMap = new Dictionary<string, BtDeviceNameID>();  // to map a device name back to an ID so we can connect to it
 
@@ -25,54 +25,72 @@ namespace OBD2Xam
             instance = this;
 
             InitializeComponent();
-           // editor.IsEnabled = false;
 
             driver.LineRecievedEvent += Driver_LineRecievedEvent;
             driver.OnConnect += Driver_OnConnect;
 
-
-            populateDevices();
+            driver.BtDeviceAdded += Driver_BtDeviceAdded;
+            driver.BtDeviceEnumerationComplete += Driver_BtDeviceEnumerationComplete;
+            driver.BtDeviceEnumerationStarted += Driver_BtDeviceEnumerationStarted;
+            driver.BtDeviceRemoved += Driver_BtDeviceRemoved;
+            driver.BtDeviceUpdated += Driver_BtDeviceUpdated;
+            deviceList.ItemsSource = deviceMap.Values;
+            driver.StartBtDeviceEnumeration();
         }
 
-
-        // break this out of the constructor so we can decorate with async
-        private async void populateDevices()
+        private void Driver_BtDeviceEnumerationStarted(object sender, EventArgs e)
         {
-            // get a list of devices to throw into a list box
-            List<BtDeviceNameID> devices = await driver.EnumerateDevices();
-
-            // extract the names and add them to the listbox
-            // use a map with the name as the key to lookup the device ID in response to the connect buttons
-            List<string> names = new List<string>();
-            foreach(BtDeviceNameID d in devices)
-            {
-                names.Add(d.Name);
-
-                // build the device map while we're at it
-                deviceMap.Add(d.Name, d);
-            }
-            deviceList.ItemsSource = names;
+            deviceMap.Clear();
         }
+
+        private void Driver_BtDeviceUpdated(object sender, BtDeviceUpdatedParams e)
+        {
+            //throw new NotImplementedException();
+        }
+
+        private void Driver_BtDeviceAdded(object sender, BtDeviceAddedParams e)
+        {
+            deviceMap.Add(e.name, new BtDeviceNameID() { ID = e.id, Name = e.name });
+        }
+
+        private void Driver_BtDeviceRemoved(object sender, BtDeviceRemovedParams e)
+        {
+            deviceMap.Remove(e.id);
+        }
+
+        private void Driver_BtDeviceEnumerationComplete(object sender, EventArgs e)
+        {
+        }
+
+
 
         private async void StartButton_Clicked(object sender, EventArgs e)
         {
 
-            if (deviceList.SelectedItem!=null)
+            try
             {
-                string name = deviceList.SelectedItem.ToString();
-
-                if (!started)
+                if (deviceList.SelectedItem!=null)
                 {
-                    instance.showText(string.Format("Connecting to \"{0}\"...", name));
+                    string name = deviceList.SelectedItem.ToString();
+
+                    if (!started)
+                    {
+                        Instance.showText(string.Format("Connecting to \"{0}\"...", name));
+                    }
+
+                    started = await driver.BtConnect(deviceMap[name].ID).ConfigureAwait(false);
                 }
 
-                started = await driver.BtConnect(deviceMap[name].ID).ConfigureAwait(false);
+                if (started)
+                {
+                    driver.Start();
+                    Instance.showText("done");
+                }
             }
-
-            if (started)
+            catch(Exception exc)
             {
-                driver.Start();
-                instance.showText("done");
+                System.Diagnostics.Debug.WriteLine(exc.Message);
+                System.Diagnostics.Debugger.Break();
             }
         }
 
@@ -85,7 +103,7 @@ namespace OBD2Xam
         private void Driver_OnConnect(BtSerialCommMgr drv)
         {
             //System.Diagnostics.Debugger.Break();
-             instance.showText("Connected.");
+             Instance.showText("Connected.");
         }
 
         protected override void OnDisappearing()
@@ -96,9 +114,9 @@ namespace OBD2Xam
 
         public static void ShowText(string text)
         {
-            Device.BeginInvokeOnMainThread(() => {
-                instance.showText(text);
-            });
+            Device.BeginInvokeOnMainThread((Action)(() => {
+                MainPage.Instance.showText(text);
+            }));
             System.Threading.Thread.Yield();
         }
 
@@ -112,5 +130,9 @@ namespace OBD2Xam
             MainPage.ShowText(line);
         }
 
+        public void StartBtDeviceEnumeration()
+        {
+            throw new NotImplementedException();
+        }
     }
 }
