@@ -10,7 +10,7 @@ namespace OBD2Xam
 {
     public partial class MainPage : ContentPage
     {
-        private SerialDriver driver = new SerialDriver();
+        private BtSerialCommMgr driver = new BtSerialCommMgr();
         private static MainPage instance = null;
         private bool started = false;
         private Dictionary<string, BtDeviceNameID> deviceMap = new Dictionary<string, BtDeviceNameID>();  // to map a device name back to an ID so we can connect to it
@@ -82,7 +82,7 @@ namespace OBD2Xam
             System.Diagnostics.Debugger.Break();
         }
 
-        private void Driver_OnConnect(SerialDriver drv)
+        private void Driver_OnConnect(BtSerialCommMgr drv)
         {
             //System.Diagnostics.Debugger.Break();
              instance.showText("Connected.");
@@ -107,7 +107,7 @@ namespace OBD2Xam
             //editor.Text += (text + System.Environment.NewLine);
         }
 
-        private void Driver_LineRecievedEvent(SerialDriver drv, string line)
+        private void Driver_LineRecievedEvent(BtSerialCommMgr drv, string line)
         {
             MainPage.ShowText(line);
         }

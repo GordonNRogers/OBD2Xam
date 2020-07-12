@@ -19,15 +19,10 @@ namespace OBD2Xam
         Task<bool> BtConnect(string deviceID);
 
 
-        //bool InitializeSerialPort(string port, int baud);
-        //void Open();
-        string ReadAvailableData();
+        string ReadLine();
         void WriteLine(string text);
         void Close();
         bool IsOpen();
 
-
-        //event SerialDefs.ConnectionEventType OnConnect;
-        //event SerialDefs.ConnectionEventType OnTimeout;
     }
 }

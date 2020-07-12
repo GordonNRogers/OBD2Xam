@@ -1,5 +1,4 @@
-﻿#define USE_STREAMREADER
-using OBD2Xam.UWP;
+﻿using OBD2Xam.UWP;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -29,18 +28,7 @@ namespace OBD2Xam.UWP
 {
     class SerialComm : ISerialComm
     {
-        //protected string comPort = "";
-        //protected SerialPort sp;
-        //protected SerialDevice sd = null;
         private bool isOpen = false;
-
-        //public event SerialDefs.ConnectionEventType OnConnect = new SerialDefs.ConnectionEventType(defaultConnectionEventHandler);
-        //public event SerialDefs.ConnectionEventType OnTimeout = new SerialDefs.ConnectionEventType(defaultConnectionEventHandler);
-
-        //protected SerialDevice serialDevice = null;
-
-        //private BluetoothAdapter adapter = null;
-        //  private BluetoothSocket _socket = null;
 
         // per https://www.bluetooth.com/specifications/assigned-numbers/service-discovery/,
         // the service type 1101 is the serial port
@@ -48,24 +36,13 @@ namespace OBD2Xam.UWP
 
         StreamSocket streamSocket = null;
         DataWriter dw = null;
-
-#if USE_STREAMREADER
         StreamReader sr = null;
-#else
-        DataReader dr = null;
-#endif
 
         public void Close()
         {
             try
             {
-
-#if USE_STREAMREADER
                 sr.Dispose();
-#else
-                dr.Dispose();
-#endif
-
                 dw.Dispose();
                 streamSocket.Dispose();
             }
@@ -89,143 +66,36 @@ namespace OBD2Xam.UWP
             // do nothing, just something to call
         }
 
-        public async void Open()
-        {
-            //bool isOpen = false;
-            try
-            {
-                // https://stackoverflow.com/questions/44308078/getting-the-com-port-name-for-a-known-bluetooth-device-in-uwp
-
-
-                //string selector = BluetoothAdapter.GetDeviceSelector();
-                //adapter = await BluetoothAdapter.FromIdAsync(selector);
-
-
-                //adapter = await BluetoothAdapter.GetDefaultAsync();
-                //if (adapter == null)
-                //    throw new Exception("No Bluetooth adapter found.");
-
-                //Windows.Devices.Radios.Radio radio = await adapter.GetRadioAsync();
-                //if(radio.State != Windows.Devices.Radios.RadioState.On)
-                //    throw new Exception("Bluetooth adapter is not enabled.");
-
-                //string deviceId = adapter.DeviceId;
-                //SerialDevice sd = await SerialDevice.FromIdAsync(deviceId);
-
-                //RfcommDeviceService service = RfcommDeviceService.GetDeviceSelectorForBluetoothDevice()
-
-                //string deviceSelector = BluetoothDevice.GetDeviceSelector();
-
-                // System.Devices.DevObjectType:=5 AND System.Devices.Aep.ProtocolId:="{E0CBF06C-CD8B-4647-BB8A-263B43F0F974}" 
-                // AND (System.Devices.Aep.IsPaired:=System.StructuredQueryType.Boolean#True 
-                // OR System.Devices.Aep.Bluetooth.IssueInquiry:=System.StructuredQueryType.Boolean#False)
-                // BluetoothDevice bd = await BluetoothDevice.FromIdAsync(deviceSelector);
-
-
-
-                /*
-                // Next, get an instance of the BluetoothDevice representing the physical device you’re connecting to. 
-                // You can get a list of currently paired devices using the adapter’s BondedDevices collection. 
-                // I use some simple LINQ to find the device I’m looking for:
-                BluetoothDevice device = (from bd in adapter. .BondedDevices
-                                          where bd.Name == "NameOfTheDevice"
-                                          select bd).FirstOrDefault();
-
-                if (device == null)
-                    throw new Exception("Named device not found.");
-
-                // Finally, use the device’s CreateRfCommSocketToServiceRecord method, which will return a BluetoothSocket 
-                // that can be used for connection and communication. Note that the UUID specified below is the standard UUID for SPP:
-                _socket = device.CreateRfcommSocketToServiceRecord(UUID.FromString("00001101-0000-1000-8000-00805f9b34fb"));
-                //await 
-                _socket.ConnectAsync().ConfigureAwait(true);
-                */
-
-                //isOpen = true;
-            }
-            catch (System.IO.IOException ioe)
-            {
-                string msg = ioe.Message.Trim();
-                if (msg == "Element not found.")
-                {
-                    // COM port or device not available
-                    System.Diagnostics.Debugger.Break();
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine(ioe.ToString());
-                    System.Diagnostics.Debugger.Break();
-                }
-            }
-            catch (Exception exc)
-            {
-                System.Diagnostics.Debug.WriteLine(exc.ToString());
-                System.Diagnostics.Debugger.Break();
-            }
-
-        }
-
-        /*
-        public bool InitializeSerialPort(string port, int baud)
-        {
-            bool initialized = false;
-            try
-            {
-                comPort = port;
-                //sp = new SerialPort(comPort, baud);
-                //sp.ReadBufferSize = Constants.BUFFER_SIZE;
-                initialized = true;
-            }
-            catch(Exception exc)
-            {
-                System.Diagnostics.Debug.WriteLine(exc.ToString());
-                System.Diagnostics.Debugger.Break();
-            }
-
-            return initialized;
-        }
-        */
-
-        public string ReadAvailableData()
+        public string ReadLine()
         {
             string result = "";
             try
             {
-
-#if USE_STREAMREADER
                 lock (sr)
                 {
                     // the stream only supports blocking reads, so the thread will be blocked while trying to read
                     // the thread will block until the next byte is read, but that's ok as long as that's the sole purpose of the thread
-                    List<Byte> valuesRead = new List<Byte>();
-                    Byte nextValue = 0;
-                    while (nextValue != '\r' && nextValue != '\n')
+                    List<byte> valuesRead = new List<byte>();
+                    byte nextCharVal = 0;
+                    do
                     {
                         int nextIntVal = sr.Read();
                         //System.Diagnostics.Debug.WriteLine(string.Format("nextIntVal: 0x{0:X4}", nextIntVal));
-                        nextValue = (Byte)nextIntVal;
-                        valuesRead.Add((byte)nextValue);
-                    }
+                        nextCharVal = (byte)nextIntVal;
+                        if (nextCharVal == '\n' || nextCharVal == '\r')
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            //System.Diagnostics.Debug.WriteLine(string.Format("nextCharVal: 0x{0:X4}", nextCharVal));
+                            valuesRead.Add((byte)nextCharVal);
+                        }
+                    } while (true);
 
                     result = Encoding.UTF8.GetString(valuesRead.ToArray());
                     //System.Diagnostics.Debug.WriteLine("result: " + result);
                 }
-
-#else
-                //long buflen = dr.ReadBuffer(1).Length;
-
-                System.Diagnostics.Debug.WriteLine("UnconsumedBufferLength: " + dr.UnconsumedBufferLength);
-                if (dr.UnconsumedBufferLength > 0)
-                {
-                    result = dr.ReadString(dr.UnconsumedBufferLength);
-                    System.Diagnostics.Debug.WriteLine("result: " + result);
-                }
-
-                //result = dr.ReadString(1);
-                //System.Diagnostics.Debug.WriteLine(result);
-#endif
-
-
             }
             catch (Exception exc)
             {
@@ -361,7 +231,6 @@ namespace OBD2Xam.UWP
             {
                 //System.Diagnostics.Debug.Assert(Thread.CurrentThread.IsBackground, "SerialComm:BtConnect() cannot be called from the UI thread.");
 
-                //System.Diagnostics.Debugger.Break();
                 DeviceAccessStatus accessStatus = DeviceAccessInformation.CreateFromId(deviceID).CurrentStatus;
                 if (accessStatus == DeviceAccessStatus.DeniedByUser)
                 {
@@ -412,7 +281,6 @@ namespace OBD2Xam.UWP
                     // https://blog.j2i.net/2018/07/29/connecting-to-bluetooth-rfcomm-with-uwp/
                     if (rfResultList.Services.Count > 0)
                     {
-                        // SERIAL_PORT_INTERFACE
                         foreach (var service in rfResultList.Services)
                         {
                             if (service.ServiceId.AsString() == SERIAL_PORT_INTERFACE)
@@ -420,14 +288,8 @@ namespace OBD2Xam.UWP
                                 streamSocket = new StreamSocket(); 
                                 await streamSocket.ConnectAsync(service.ConnectionHostName, service.ConnectionServiceName);
                                 dw = new DataWriter(streamSocket.OutputStream);
-#if USE_STREAMREADER
                                 sr = new StreamReader(streamSocket.InputStream.AsStreamForRead(256));
-#else
-                                dr = new DataReader(streamSocket.InputStream);
-#endif
                                 isOpen = true;
-                                // read/write still not working...connecting to the right service???
-                                // test with a bluetooth serial terminal and see if that will connect
                                 break;
                             }
                         }
@@ -453,9 +315,6 @@ namespace OBD2Xam.UWP
         {
             try
             {
-                //DateTime dtNow = DateTime.Now;
-                //string sTimeStamp = dtNow.ToString("yyyyMMdd_hhmmss");
-                //string fileName = sTimeStamp + ".log";
                 string fileName = "BtServices.log";
 
                 // can't use Syste.IO in UWP, use Windows.Storage instead: 
@@ -472,7 +331,6 @@ namespace OBD2Xam.UWP
                 lines.Add("Device.BluetoothAddress: " + device.BluetoothAddress);
                 lines.Add("Device.BluetoothDeviceId: " + device.BluetoothDeviceId.Id);
                 lines.Add("Device.ClassOfDevice: " + device.ClassOfDevice.ServiceCapabilities);
-                //var sdpRecs = device.SdpRecords;
                 lines.Add("");
 
                 foreach (RfcommDeviceService rf in rfResultList.Services)
@@ -482,26 +340,15 @@ namespace OBD2Xam.UWP
                     lines.Add("ConnectionServiceName: " + rf.ConnectionServiceName);
                     //lines.Add("selector: " + RfcommDeviceService.GetDeviceSelectorForBluetoothDeviceAndServiceId(rf.Device, rf.ServiceId));
 
-                    //RfcommServiceProvider rsp = await RfcommServiceProvider.CreateAsync(rf.ServiceId);
-
                     DeviceAccessStatus serviceAccessStatus = await rf.RequestAccessAsync();
                     lines.Add("serviceAccessStatus: " + serviceAccessStatus);
 
-                    /*
-                    SerialDevice sd = await SerialDevice.FromIdAsync(rf.Device.DeviceId);
-                    if(sd!=null)
-                    {
-                        System.Diagnostics.Debugger.Break();
-                    }
-                    */
                     lines.Add("----------------------------");
 
                 }
                 
                 await FileIO.WriteLinesAsync(logFile, lines);
                 lines.Clear();
-
-                //System.Diagnostics.Debugger.Break();
             }
             catch (Exception exc)
             {

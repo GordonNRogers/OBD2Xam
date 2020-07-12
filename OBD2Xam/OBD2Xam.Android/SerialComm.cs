@@ -27,11 +27,6 @@ namespace OBD2Xam.Droid
         public event SerialDefs.ConnectionEventType OnConnect = new SerialDefs.ConnectionEventType(defaultConnectionEventHandler);
         public event SerialDefs.ConnectionEventType OnTimeout = new SerialDefs.ConnectionEventType(defaultConnectionEventHandler);
 
-        public bool InitializeSerialPort(string port, int baud)
-        {
-            throw new NotImplementedException();
-        }
-
 
         private static void defaultConnectionEventHandler()
         {
@@ -94,7 +89,7 @@ namespace OBD2Xam.Droid
             }
         }
 
-        public string ReadAvailableData()
+        public string ReadLine()
         {
             string result = "";
             try
