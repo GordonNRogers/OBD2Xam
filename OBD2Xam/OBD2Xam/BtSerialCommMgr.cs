@@ -28,7 +28,7 @@ namespace OBD2Xam
 
         private const int retrySeconds = 60;
 
-        private ISerialComm deviceCommDriver;
+        private IBTSerialComm deviceCommDriver;
         private bool connected = false;
 
         private const string lineSeperator = "\r";
@@ -40,7 +40,7 @@ namespace OBD2Xam
 
         public BtSerialCommMgr()
         {
-            deviceCommDriver = DependencyService.Get<ISerialComm>();
+            deviceCommDriver = DependencyService.Get<IBTSerialComm>();
             deviceCommDriver.BtDeviceAdded += DeviceCommDriver_BtDeviceAdded;
             deviceCommDriver.BtDeviceRemoved += DeviceCommDriver_BtDeviceRemoved;
             deviceCommDriver.BtDeviceUpdated += DeviceCommDriver_BtDeviceUpdated;

@@ -6,19 +6,10 @@ using System.Threading.Tasks;
 
 namespace OBD2Xam
 {
-    /*
-    public class SerialDefs
-    {
-        public delegate void ConnectionEventType();
-    }
-    */
-
-
-    public interface ISerialComm : IBtEnum
+    public interface IBTSerialComm : IBtEnum, IDisposable
     {
 
         // methods/props for dealing with bluetooth device
-        //Task< List<BtDeviceNameID> > GetBTDevices();
         Task<bool> BtConnect(string deviceID);
 
 

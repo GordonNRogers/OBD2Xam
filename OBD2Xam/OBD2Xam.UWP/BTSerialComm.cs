@@ -1,4 +1,5 @@
-﻿using OBD2Xam.UWP;
+﻿using OBD2Xam;
+using OBD2Xam.UWP;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -22,22 +23,19 @@ using Windows.Storage;
 using System.Text;
 using System.Runtime.CompilerServices;
 
-[assembly: Xamarin.Forms.Dependency(typeof(SerialComm))]
+[assembly: Xamarin.Forms.Dependency(typeof(BTSerialComm))]
 #pragma warning disable 1998  // disable 'no await' warnings
 
 namespace OBD2Xam.UWP
 {
-    class SerialComm : ISerialComm
+    class BTSerialComm : IBTSerialComm
     {
-        // per https://www.bluetooth.com/specifications/assigned-numbers/service-discovery/,
-        // the service type 1101 is the serial port
-        private const string SERIAL_PORT_INTERFACE = @"{00001101-0000-1000-8000-00805F9B34FB}";
 
         StreamSocket streamSocket = null;
         DataWriter dw = null;
         StreamReader sr = null;
 
-        public SerialComm()
+        public BTSerialComm()
         {
             BtDeviceEnumerationStarted += SerialComm_BtDeviceEnumerationStarted;
             BtDeviceEnumerationComplete += SerialComm_BtDeviceEnumerationComplete;
@@ -51,6 +49,11 @@ namespace OBD2Xam.UWP
         {
         }
 
+        public void Dispose()
+        {
+            Close();
+        }
+
         public void Close()
         {
             try
@@ -58,6 +61,9 @@ namespace OBD2Xam.UWP
                 sr?.Dispose();
                 dw?.Dispose();
                 streamSocket?.Dispose();
+                sr = null;
+                dw = null;
+                streamSocket = null;
             }
             catch (Exception exc)
             {
@@ -69,11 +75,6 @@ namespace OBD2Xam.UWP
         // https://docs.microsoft.com/en-us/windows/uwp/packaging/app-capability-declarations
         // https://docs.microsoft.com/en-us/uwp/api/windows.devices.serialcommunication
         // https://docs.microsoft.com/en-us/uwp/api/windows.devices.serialcommunication.serialdevice
-
-        private static void defaultConnectionEventHandler()
-        {
-            // do nothing, just something to call
-        }
 
         public string ReadLine()
         {
@@ -147,12 +148,13 @@ namespace OBD2Xam.UWP
 
         // https://docs.microsoft.com/en-us/uwp/api/windows.devices.enumeration.devicewatcher?f1url=https%3A%2F%2Fmsdn.microsoft.com%2Fquery%2Fdev15.query%3FappId%3DDev15IDEF1%26l%3DEN-US%26k%3Dk(Windows.Devices.Enumeration.DeviceWatcher)%3Bk(TargetFrameworkMoniker-.NETCore%2CVersion%3Dv5.0)%3Bk(DevLang-csharp)%26rd%3Dtrue
         private DeviceWatcher deviceWatcher = null;
+        private bool disposedValue;
 
         public event EventHandler<BtDeviceAddedParams> BtDeviceAdded;
         public event EventHandler<BtDeviceRemovedParams> BtDeviceRemoved;
         public event EventHandler<BtDeviceUpdatedParams> BtDeviceUpdated;
         public event EventHandler BtDeviceEnumerationComplete;
-        public event EventHandler BtDeviceEnumerationStarted ;
+        public event EventHandler BtDeviceEnumerationStarted;
 
         private void onBtDeviceAdded (DeviceWatcher dw, DeviceInformation di)
         {
@@ -193,6 +195,7 @@ namespace OBD2Xam.UWP
             deviceWatcher.EnumerationCompleted += new TypedEventHandler<DeviceWatcher, object>(OnBtEnumerationComplete);
             deviceWatcher.Stopped += new TypedEventHandler<DeviceWatcher, object>(OnBtEnumerationComplete);
             deviceWatcher.Start();
+            BtDeviceEnumerationStarted(this, new EventArgs());
         }
 
         public async Task<bool> BtConnect(string deviceID)
@@ -259,7 +262,7 @@ namespace OBD2Xam.UWP
                     {
                         foreach (var service in rfResultList.Services)
                         {
-                            if (service.ServiceId.AsString() == SERIAL_PORT_INTERFACE)
+                            if (service.ServiceId.AsString() == Constants.BT_SERIAL_PORT_INTERFACE)
                             {
                                 streamSocket = new StreamSocket(); 
                                 await streamSocket.ConnectAsync(service.ConnectionHostName, service.ConnectionServiceName);
@@ -343,5 +346,6 @@ namespace OBD2Xam.UWP
             }
 
         }
+
     }
 }
